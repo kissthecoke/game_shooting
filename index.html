@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>iframe 테스트 - Soldier Legacy</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#111; display:flex; flex-direction:column; align-items:center;
+       font-family:'Courier New',monospace; color:#fff; padding:20px; gap:16px; }
+h1 { color:#0af; font-size:20px; }
+.info { color:#aaa; font-size:13px; line-height:1.6; max-width:900px; text-align:center; }
+.info b { color:#f88; }
+iframe { width:900px; height:600px; border:2px solid #0af; border-radius:6px; }
+.controls { display:flex; gap:12px; }
+button { background:#0af; color:#000; border:none; padding:8px 20px;
+         border-radius:6px; cursor:pointer; font-size:14px; font-weight:bold; font-family:inherit; }
+button:hover { background:#4cf; }
+</style>
+</head>
+<body>
+<h1>▶ iframe 통합 테스트</h1>
+<div class="info">
+  아래 iframe 안에서 게임을 실행합니다.<br>
+  <b>체크포인트:</b>
+  ① 클릭 → 포인터락 → 정상 게임 시작 &nbsp;
+  ② 적 모델이 보이는지 &nbsp;
+  ③ 탭 전환 후 복귀해도 deltaTime이 폭주하지 않는지 &nbsp;
+  ④ 플레이어가 비정상적으로 빠르게 죽지 않는지
+</div>
+<div class="controls">
+  <button onclick="document.getElementById('gf').src=document.getElementById('gf').src">
+    🔄 iframe 새로고침
+  </button>
+  <button onclick="simulateHidden()">🔀 비활성 시뮬레이션 (5초)</button>
+</div>
+<iframe id="gf" src="soldier76.html"
+  allow="pointer-lock"
+  sandbox="allow-scripts allow-same-origin allow-pointer-lock">
+</iframe>
+<div class="info" id="log" style="color:#8f8">대기 중...</div>
+
+<script>
+// 탭 전환(visibilitychange) 시뮬레이션
+function simulateHidden() {
+  const gf = document.getElementById('gf');
+  const log = document.getElementById('log');
+  log.textContent = '⏳ iframe을 5초간 숨김 처리합니다 (비활성 시뮬레이션)...';
+  gf.style.visibility = 'hidden';
+  setTimeout(() => {
+    gf.style.visibility = 'visible';
+    log.textContent = '✅ iframe 복귀 완료. 게임이 정상적으로 계속되면 deltaTime 방어 코드가 동작 중입니다.';
+  }, 5000);
+}
+</script>
+</body>
+</html>
