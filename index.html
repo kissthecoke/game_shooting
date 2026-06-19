@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Soldier: Legacy - Fan-Made FPS</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; font-family:'Courier New',monospace; }
+canvas#c { display:block; position:fixed; top:0; left:0; }
+
+/* ── HUD ── */
+#hud { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
+
+/* 조준점 – transform 중앙정렬로 컨테이너 크기 변화에도 잘리지 않음 */
+#ch { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      width:36px; height:36px; pointer-events:none; z-index:9999; }
+.cl { position:absolute; background:rgba(255,255,255,.95); border-radius:1px; }
+.ct  { top:0;    left:50%; width:2px;  height:13px; transform:translateX(-50%); }
+.cb  { bottom:0; left:50%; width:2px;  height:13px; transform:translateX(-50%); }
+.cl2 { left:0;   top:50%;  width:13px; height:2px;  transform:translateY(-50%); }
+.cr  { right:0;  top:50%;  width:13px; height:2px;  transform:translateY(-50%); }
+.cd  { left:50%; top:50%;  width:3px;  height:3px;  transform:translate(-50%,-50%); }
+
+/* 점수 */
+#score { position:absolute; top:18px; right:20px; text-align:right; color:#fff;
+  text-shadow:0 0 8px #0af; }
+#score .sv { font-size:clamp(38px,3.2vw,56px); font-weight:bold; color:#0af; line-height:1; }
+#score .hv { font-size:clamp(15px,1.4vw,20px); color:#aaa; margin-top:4px; }
+
+/* 스킬 바 */
+#skillbar { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); display:flex; gap:22px; }
+.sk { width:110px; height:110px; position:relative; border:2px solid rgba(255,255,255,.3);
+  border-radius:10px; overflow:hidden; background:rgba(0,20,50,.75); }
+.sk-ico { width:100%; height:100%; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:5px; }
+.sk-key { font-size:clamp(22px,2vw,28px); font-weight:bold; color:#0af; }
+.sk-name { font-size:clamp(11px,1vw,15px); color:#ccc; text-align:center; line-height:1.3; }
+.sk-cd { position:absolute; top:0; left:0; width:100%; height:100%;
+  background:rgba(0,0,0,.78); display:flex; align-items:center; justify-content:center;
+  color:#fff; font-size:clamp(20px,1.8vw,26px); font-weight:bold; border-radius:9px; transition:opacity .15s; }
+.sk-cd.rdy { opacity:0; pointer-events:none; }
+
+/* 체력 */
+#hp { position:absolute; bottom:180px; left:18px; width:260px; }
+#hp .lbl { color:#fff; font-size:clamp(14px,1.3vw,18px); margin-bottom:5px; }
+#hp .bg { background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.3); height:13px; border-radius:5px; overflow:hidden; }
+#hp .fill { height:100%; width:100%; background:linear-gradient(90deg,#f44,#f84); border-radius:5px; }
+
+/* 바이오틱 표시 */
+#bio { position:absolute; top:50%; left:50%; transform:translate(-50%,-100px);
+  color:#0f8; font-size:clamp(18px,1.6vw,24px); font-weight:bold; text-shadow:0 0 12px #0f8;
+  opacity:0; transition:opacity .3s; }
+
+/* 타격태세 비네트 */
+#vign { position:absolute; top:0; left:0; width:100%; height:100%; opacity:0;
+  transition:opacity .3s; pointer-events:none;
+  background:radial-gradient(ellipse at center, transparent 55%, rgba(220,0,0,.45) 100%); }
+
+/* 조작법 */
+#hint { position:absolute; top:18px; left:18px; color:rgba(255,255,255,.9);
+  font-size:clamp(14px,1.35vw,18px); background:rgba(0,0,0,.6); padding:18px 22px;
+  border-radius:8px; border-left:4px solid #0af; line-height:1.7; pointer-events:none; }
+#hint h3 { color:#0af; font-size:clamp(22px,2vw,30px); margin-bottom:8px; letter-spacing:2px; }
+
+/* 일시정지 */
+#pause { position:absolute; top:0; left:0; width:100%; height:100%;
+  background:rgba(0,0,0,.6); display:none; flex-direction:column;
+  align-items:center; justify-content:center; color:#fff; }
+#pause h2 { font-size:clamp(30px,2.8vw,42px); color:#0af; margin-bottom:14px; }
+#pause p { color:#ccc; font-size:clamp(15px,1.4vw,20px); }
+
+/* 킬피드 */
+#kf { position:absolute; top:90px; right:20px; width:240px; text-align:right; }
+.kfe { color:#fd0; font-size:clamp(13px,1.2vw,17px); margin-bottom:6px;
+  text-shadow:0 0 6px rgba(255,200,0,.6); animation:kfa 2.5s forwards; }
+@keyframes kfa { 0%,70%{opacity:1} 100%{opacity:0} }
+
+/* 타격 플래시 */
+#hit-flash { position:absolute; top:0; left:0; width:100%; height:100%;
+  background:rgba(255,200,0,.18); opacity:0; pointer-events:none;
+  transition:opacity .05s; }
+
+/* 플레이어 피격 플래시 */
+#player-hit { position:absolute; top:0; left:0; width:100%; height:100%;
+  background:radial-gradient(ellipse at center, transparent 30%, rgba(220,0,0,.6) 100%);
+  opacity:0; pointer-events:none; transition:opacity .08s; }
+
+/* 적 수 카운트 */
+#enemy-count { position:absolute; top:18px; left:50%; transform:translateX(-50%);
+  color:#f55; font-size:clamp(13px,1.2vw,17px); font-weight:bold;
+  text-shadow:0 0 8px rgba(255,60,60,.7); letter-spacing:2px; }
+
+/* 게임오버 */
+#gameover { position:absolute; top:0; left:0; width:100%; height:100%;
+  background:rgba(0,0,0,.85); display:none; flex-direction:column;
+  align-items:center; justify-content:center; color:#fff; pointer-events:auto; }
+#gameover h2 { font-size:clamp(42px,4.5vw,64px); color:#f33;
+  text-shadow:0 0 28px #f33; margin-bottom:18px; letter-spacing:5px; }
+#go-score { font-size:clamp(20px,2vw,30px); margin-bottom:6px; color:#0af; }
+#go-hits  { font-size:clamp(15px,1.4vw,20px); color:#aaa; margin-bottom:32px; }
+#go-restart { background:#0af; color:#000; border:none;
+  padding:14px 42px; font-size:clamp(16px,1.5vw,22px);
+  border-radius:8px; cursor:pointer; font-family:'Courier New',monospace;
+  font-weight:bold; letter-spacing:1px; }
+#go-restart:hover { background:#4cf; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <!-- 조준점 -->
+  <div id="ch">
+    <div class="cl ct"></div><div class="cl cb"></div>
+    <div class="cl cl2"></div><div class="cl cr"></div>
+    <div class="cl cd"></div>
+  </div>
+
+  <!-- 점수 -->
+  <div id="score">
+    <div class="sv" id="sv">0</div>
+    <div class="hv">HITS: <span id="hv">0</span></div>
+  </div>
+
+  <!-- 체력 -->
+  <div id="hp">
+    <div class="lbl">HEALTH ░░░░░░░░░░ 100</div>
+    <div class="bg"><div class="fill"></div></div>
+  </div>
+
+  <!-- 바이오틱 -->
+  <div id="bio">⊕ 회복 중</div>
+
+  <!-- 비네트 -->
+  <div id="vign"></div>
+
+  <!-- 타격 플래시 -->
+  <div id="hit-flash"></div>
+
+  <!-- 플레이어 피격 플래시 -->
+  <div id="player-hit"></div>
+
+  <!-- 적 수 카운트 -->
+  <div id="enemy-count">ENEMIES: 8</div>
+
+  <!-- 스킬 바 -->
+  <div id="skillbar">
+    <div class="sk">
+      <div class="sk-ico"><span class="sk-key">E</span><span class="sk-name">헬릭스 로켓</span></div>
+      <div class="sk-cd rdy" id="cd-e">0</div>
+    </div>
+    <div class="sk">
+      <div class="sk-ico"><span class="sk-key">Q</span><span class="sk-name">바이오틱 필드</span></div>
+      <div class="sk-cd rdy" id="cd-q">0</div>
+    </div>
+    <div class="sk">
+      <div class="sk-ico"><span class="sk-key">R</span><span class="sk-name">타격태세</span></div>
+      <div class="sk-cd rdy" id="cd-r">0</div>
+    </div>
+  </div>
+
+  <!-- 킬피드 -->
+  <div id="kf"></div>
+
+  <!-- 조작법 안내 -->
+  <div id="hint">
+    <h3>SOLDIER : LEGACY</h3>
+    클릭 → 마우스 캡처 / 게임 시작<br>
+    WASD → 이동 &nbsp;│&nbsp; Shift → 스프린트<br>
+    Space → 점프<br>
+    좌클릭(유지) → 자동 사격<br>
+    E → 헬릭스 로켓 (CD 6s)<br>
+    Q → 바이오틱 필드 (CD 12s)<br>
+    R → 타격태세 (CD 15s / 6s 지속)<br>
+    ESC → 일시정지<br>
+    <span style="color:#f88">⚠ 적이 당신을 향해 사격합니다 — 엄폐물을 활용하세요!</span>
+  </div>
+
+  <!-- 일시정지 오버레이 -->
+  <div id="pause">
+    <h2>⏸ 일시정지</h2>
+    <p>클릭해서 게임 재개</p>
+  </div>
+
+  <!-- 게임오버 오버레이 -->
+  <div id="gameover">
+    <h2>GAME OVER</h2>
+    <div id="go-score">SCORE: 0</div>
+    <div id="go-hits">HITS: 0</div>
+    <button id="go-restart">▶ 다시 시작</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+// ============================================================
+// Three.js UMD 빌드 – file:// 에서도 더블클릭으로 바로 실행 가능
+// ============================================================
+
+// ============================================================
+// 렌더러 설정
+// ============================================================
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.autoClear = false;
+
+// ============================================================
+// 메인 씬 & 카메라
+// ============================================================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a2535);
+scene.fog = new THREE.FogExp2(0x1a2535, 0.018);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 200);
+camera.position.set(0, 1.7, 8);
+
+// ============================================================
+// 무기 씬 (별도 씬 – 깊이 버퍼 덮어쓰기로 오버레이)
+// ============================================================
+const wScene = new THREE.Scene();
+const wCam   = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.001, 10);
+wScene.add(new THREE.AmbientLight(0x889aaa, 1.2));
+const wDirL = new THREE.DirectionalLight(0xffd4a0, 2.0);
+wDirL.position.set(1, 1.5, 0.5);
+wScene.add(wDirL);
+
+// ============================================================
+// 조명 (메인 씬)
+// ============================================================
+scene.add(new THREE.AmbientLight(0x334466, 0.7));
+
+const sun = new THREE.DirectionalLight(0xffd4a0, 1.4);
+sun.position.set(20, 30, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near  = 0.1;
+sun.shadow.camera.far   = 120;
+sun.shadow.camera.left  = -40;
+sun.shadow.camera.right = 40;
+sun.shadow.camera.top   = 40;
+sun.shadow.camera.bottom= -40;
+scene.add(sun);
+
+const fillLight = new THREE.DirectionalLight(0x4488cc, 0.4);
+fillLight.position.set(-10, 5, -10);
+scene.add(fillLight);
+
+// ============================================================
+// 맵 – 사격장 아레나
+// ============================================================
+const WALL_H = 7, ARENA = 32;
+
+function mat(color, rough=0.85) {
+  return new THREE.MeshLambertMaterial({ color });
+}
+
+function box(w,h,d, color, rx=0,ry=0,rz=0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat(color));
+  m.rotation.set(rx,ry,rz);
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+
+// 바닥
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(ARENA*2, ARENA*2, 40, 40),
+  mat(0x2e3e2e)
+);
+floor.rotation.x = -Math.PI/2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// 격자
+const grid = new THREE.GridHelper(ARENA*2, 64, 0x1a3a1a, 0x1a2a1a);
+grid.position.y = 0.01;
+scene.add(grid);
+
+// 벽
+function addWall(px,py,pz, ry, ww) {
+  const w = box(ww, WALL_H, 0.6, 0x3a4f5f, 0, ry, 0);
+  w.position.set(px,py,pz);
+  scene.add(w);
+  return w;
+}
+addWall(0, WALL_H/2, -ARENA, 0, ARENA*2);
+addWall(0, WALL_H/2,  ARENA, 0, ARENA*2);
+addWall(-ARENA, WALL_H/2, 0, Math.PI/2, ARENA*2);
+addWall( ARENA, WALL_H/2, 0, Math.PI/2, ARENA*2);
+
+// 장애물 (플레이어가 뒤에 숨을 수 있는 박스들)
+const obstacleData = [
+  [6,1,-9,2,1.5,2], [-6,1,-8,2,1.5,3],
+  [4,1,5,3,1.5,1], [-9,1,9,2,1.5,2],
+  [0,1,-16,5,1.5,1], [-14,1,-8,1.5,3,1.5],
+  [12,1,-6,1.5,1.5,3],
+];
+// 장애물 AABB 충돌 데이터 저장
+const collidables = [];
+obstacleData.forEach(([x,y,z,w,h,d]) => {
+  const o = box(w,h,d, 0x445566);
+  o.position.set(x,y,z);
+  scene.add(o);
+  collidables.push({ minX:x-w/2, maxX:x+w/2, minY:y-h/2, maxY:y+h/2, minZ:z-d/2, maxZ:z+d/2 });
+});
+
+// 조명 장식 (맵 안 포인트라이트)
+[[0x4488ff,-12,4,-12],[0xff8844,12,4,4],[0x44ff88,-5,4,12]].forEach(([c,x,y,z])=>{
+  const pl = new THREE.PointLight(c, 1.2, 18);
+  pl.position.set(x,y,z);
+  scene.add(pl);
+  const lb = new THREE.Mesh(new THREE.SphereGeometry(0.18,8,8), new THREE.MeshBasicMaterial({color:c}));
+  lb.position.copy(pl.position);
+  scene.add(lb);
+});
+
+// ============================================================
+// 무기 모델 (1인칭 팔 + 헤비 펄스 라이플)
+// ============================================================
+const wGroup = new THREE.Group(); // 전체 무기 그룹
+wScene.add(wGroup);
+wGroup.position.set(0.22, -0.20, -0.38);
+
+// 전완부(forearm)
+const armM = mat(0x3a5040);
+const arm  = new THREE.Mesh(new THREE.BoxGeometry(0.065,0.065,0.22), armM);
+arm.position.set(0, 0, 0.06);
+wGroup.add(arm);
+
+// 장갑(glove)
+const gloveM = mat(0x1e1e1e);
+const glove  = new THREE.Mesh(new THREE.BoxGeometry(0.07,0.065,0.09), gloveM);
+glove.position.set(0, 0, -0.06);
+wGroup.add(glove);
+
+// 총기 그룹
+const gGroup = new THREE.Group();
+gGroup.position.set(0, 0.01, -0.10);
+wGroup.add(gGroup);
+
+// 총몸(receiver)
+const recvM = mat(0x253545);
+const recv  = new THREE.Mesh(new THREE.BoxGeometry(0.042,0.042,0.24), recvM);
+gGroup.add(recv);
+
+// 상부 레일
+const rail = new THREE.Mesh(new THREE.BoxGeometry(0.020,0.010,0.22), mat(0x1a2535));
+rail.position.set(0, 0.026, 0);
+gGroup.add(rail);
+
+// 총열(barrel)
+const barrelG = new THREE.CylinderGeometry(0.009,0.009,0.20,8);
+const barrel  = new THREE.Mesh(barrelG, mat(0x181e28));
+barrel.rotation.x = Math.PI/2;
+barrel.position.set(0, 0.012, -0.19);
+gGroup.add(barrel);
+
+// 총구 플래시 가드
+const guard = new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.014,0.025,8), mat(0x111620));
+guard.rotation.x = Math.PI/2;
+guard.position.set(0, 0.012, -0.30);
+gGroup.add(guard);
+
+// 손잡이(grip)
+const grip = new THREE.Mesh(new THREE.BoxGeometry(0.032,0.075,0.038), gloveM);
+grip.position.set(0, -0.055, 0.030);
+grip.rotation.x = 0.18;
+gGroup.add(grip);
+
+// 탄창(magazine)
+const mag = new THREE.Mesh(new THREE.BoxGeometry(0.028,0.068,0.042), mat(0x2e3d4d));
+mag.position.set(0, -0.055, -0.015);
+gGroup.add(mag);
+
+// 조준경(scope)
+const scopeBody = new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.10,8), mat(0x111620));
+scopeBody.rotation.x = Math.PI/2;
+scopeBody.position.set(0, 0.033, 0.02);
+gGroup.add(scopeBody);
+
+// 조준경 렌즈
+const scopeLens = new THREE.Mesh(new THREE.CircleGeometry(0.010,8), mat(0x004488));
+scopeLens.position.set(0, 0.033, -0.03);
+gGroup.add(scopeLens);
+
+// 전방 수직 손잡이
+const foregrip = new THREE.Mesh(new THREE.BoxGeometry(0.022,0.050,0.022), gloveM);
+foregrip.position.set(0, -0.042, -0.10);
+gGroup.add(foregrip);
+
+// 총구 위치 기준점 (발사 위치)
+const muzzlePt = new THREE.Object3D();
+muzzlePt.position.set(0, 0.012, -0.315);
+gGroup.add(muzzlePt);
+
+// 머즐 플래시 메쉬
+const mFlashGeo = new THREE.SphereGeometry(0.028, 8, 8);
+const mFlashMat = new THREE.MeshBasicMaterial({ color:0xffaa00, transparent:true, opacity:0, blending:THREE.AdditiveBlending });
+const mFlash = new THREE.Mesh(mFlashGeo, mFlashMat);
+muzzlePt.add(mFlash);
+const mFlashLight = new THREE.PointLight(0xffaa00, 0, 0.5);
+muzzlePt.add(mFlashLight);
+
+// 타격태세 발광 (숨김 상태 시작)
+const tacEmissive = new THREE.Mesh(
+  new THREE.BoxGeometry(0.044, 0.044, 0.242),
+  new THREE.MeshBasicMaterial({ color:0xff3300, transparent:true, opacity:0, blending:THREE.AdditiveBlending })
+);
+gGroup.add(tacEmissive);
+
+// 리코일 기본 위치
+const wGroupBaseZ = wGroup.position.z;
+let recoil = 0, recoilV = 0;
+
+// ============================================================
+// Web Audio API – 사운드 합성
+// ============================================================
+const actx = new (window.AudioContext || window.webkitAudioContext)();
+
+function resume() { if(actx.state==='suspended') actx.resume(); }
+
+function playShot(boost=false) {
+  const t = actx.currentTime;
+  const master = actx.createGain();
+  master.gain.setValueAtTime(boost ? 0.45 : 0.3, t);
+  master.connect(actx.destination);
+
+  // 화이트 노이즈 레이어
+  const len = actx.sampleRate * 0.12;
+  const buf = actx.createBuffer(1, len, actx.sampleRate);
+  const d   = buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.5);
+  const ns = actx.createBufferSource(); ns.buffer = buf;
+  const nf = actx.createBiquadFilter(); nf.type='bandpass';
+  nf.frequency.setValueAtTime(900, t);
+  nf.frequency.exponentialRampToValueAtTime(180, t+0.1);
+  nf.Q.value = 0.4;
+  const ng = actx.createGain();
+  ng.gain.setValueAtTime(1,t);
+  ng.gain.exponentialRampToValueAtTime(0.001,t+0.12);
+  ns.connect(nf); nf.connect(ng); ng.connect(master);
+  ns.start(t);
+
+  // 톤 레이어
+  const osc = actx.createOscillator(); osc.type='sawtooth';
+  osc.frequency.setValueAtTime(boost?200:140,t);
+  osc.frequency.exponentialRampToValueAtTime(55,t+0.09);
+  const og = actx.createGain();
+  og.gain.setValueAtTime(0.18,t);
+  og.gain.exponentialRampToValueAtTime(0.001,t+0.09);
+  osc.connect(og); og.connect(master);
+  osc.start(t); osc.stop(t+0.1);
+}
+
+function playExplosionSfx() {
+  const t = actx.currentTime;
+  const master = actx.createGain();
+  master.gain.setValueAtTime(0.55, t); master.connect(actx.destination);
+
+  const len = actx.sampleRate * 0.6;
+  const buf = actx.createBuffer(1,len,actx.sampleRate);
+  const d   = buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,1.2);
+  const ns = actx.createBufferSource(); ns.buffer = buf;
+  const nf = actx.createBiquadFilter(); nf.type='lowpass';
+  nf.frequency.setValueAtTime(600,t);
+  nf.frequency.exponentialRampToValueAtTime(80,t+0.5);
+  const ng = actx.createGain();
+  ng.gain.setValueAtTime(1,t); ng.gain.exponentialRampToValueAtTime(0.001,t+0.55);
+  ns.connect(nf); nf.connect(ng); ng.connect(master); ns.start(t);
+}
+
+function playSfxPing(freq=440) {
+  const t = actx.currentTime;
+  const osc = actx.createOscillator(); osc.type='sine';
+  osc.frequency.setValueAtTime(freq,t);
+  osc.frequency.exponentialRampToValueAtTime(freq*2,t+0.15);
+  const g = actx.createGain();
+  g.gain.setValueAtTime(0.2,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.2);
+  osc.connect(g); g.connect(actx.destination);
+  osc.start(t); osc.stop(t+0.2);
+}
+
+// 적 발사음 (플레이어 총소리보다 낮고 둔탁한 톤)
+function playEnemyShotSfx() {
+  const t = actx.currentTime;
+  const master = actx.createGain();
+  master.gain.setValueAtTime(0.12, t); master.connect(actx.destination);
+  const len = actx.sampleRate * 0.09;
+  const buf = actx.createBuffer(1, len, actx.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3);
+  const ns = actx.createBufferSource(); ns.buffer=buf;
+  const nf = actx.createBiquadFilter(); nf.type='bandpass';
+  nf.frequency.setValueAtTime(500,t); nf.Q.value=0.5;
+  const ng = actx.createGain();
+  ng.gain.setValueAtTime(1,t); ng.gain.exponentialRampToValueAtTime(0.001,t+0.09);
+  ns.connect(nf); nf.connect(ng); ng.connect(master); ns.start(t);
+  const osc = actx.createOscillator(); osc.type='sawtooth';
+  osc.frequency.setValueAtTime(280,t);
+  osc.frequency.exponentialRampToValueAtTime(70,t+0.07);
+  const og = actx.createGain();
+  og.gain.setValueAtTime(0.1,t); og.gain.exponentialRampToValueAtTime(0.001,t+0.07);
+  osc.connect(og); og.connect(master);
+  osc.start(t); osc.stop(t+0.08);
+}
+
+// 플레이어 피격음 (둔탁한 충격음)
+function playPlayerHitSfx() {
+  const t = actx.currentTime;
+  const osc = actx.createOscillator(); osc.type='triangle';
+  osc.frequency.setValueAtTime(180,t);
+  osc.frequency.exponentialRampToValueAtTime(60,t+0.18);
+  const g = actx.createGain();
+  g.gain.setValueAtTime(0.28,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.2);
+  osc.connect(g); g.connect(actx.destination);
+  osc.start(t); osc.stop(t+0.22);
+}
+
+// ============================================================
+// 타겟 시스템
+// ============================================================
+const targets  = [];
+const T_HP_MAX = 100;
+
+function spawnTarget(pos) {
+  const g = new THREE.Group();
+  g.position.copy(pos);
+
+  // 몸통
+  const bodyM = new THREE.MeshLambertMaterial({ color:0xcc4422 });
+  const body  = new THREE.Mesh(new THREE.CapsuleGeometry(0.32,0.8,4,8), bodyM);
+  body.position.y = 0.9; body.castShadow = true; g.add(body);
+
+  // 머리
+  const headM = new THREE.MeshLambertMaterial({ color:0xdd6644 });
+  const head  = new THREE.Mesh(new THREE.SphereGeometry(0.23,8,8), headM);
+  head.position.y = 1.82; head.castShadow = true; g.add(head);
+
+  // HP 바 빌보드
+  const hpG = new THREE.Group(); hpG.position.y = 2.3; g.add(hpG);
+  const hpBg = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.75,0.07),
+    new THREE.MeshBasicMaterial({ color:0x222222, transparent:true, opacity:0.8 })
+  ); hpG.add(hpBg);
+  const hpFill = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.75,0.07),
+    new THREE.MeshBasicMaterial({ color:0x44ff44, transparent:true, opacity:0.9 })
+  ); hpFill.position.z=0.001; hpG.add(hpFill);
+
+  scene.add(g);
+
+  const t = {
+    g, body, head, hpFill, hpG,
+    hp: T_HP_MAX, alive:true,
+    // AI 이동
+    aiTarget: pos.clone(),
+    aiMoveTimer: Math.random() * 2,
+    aiSpeed: 2.0 + Math.random() * 0.8,
+    // AI 사격 (각 적마다 다른 주기)
+    aiFireTimer: 1.5 + Math.random() * 2.5,
+    aiFireInterval: 1.5 + Math.random() * 1.0,
+    respawn: 0,
+  };
+  targets.push(t);
+  return t;
+}
+
+// 초기 타겟 배치
+[
+  [-5,0,-16],[5,0,-19],[-12,0,-13],[12,0,-15],
+  [0,0,-22],[-7,0,-23],[8,0,-21],[0,0,-12],
+].forEach(([x,y,z]) => spawnTarget(new THREE.Vector3(x,y,z)));
+
+function refreshHpBar(t) {
+  const r = t.hp/T_HP_MAX;
+  t.hpFill.scale.x = r;
+  t.hpFill.position.x = (r-1)*0.375;
+  t.hpFill.material.color.setHex(r>0.5?0x44ff44:r>0.25?0xffaa00:0xff2222);
+}
+
+function killTarget(t) {
+  t.alive=false; t.g.visible=false; t.respawn=4+Math.random()*2;
+  spawnParticles(t.g.position.clone().setY(1), 30, 0xff4400, 0.16, 1.3);
+  updateEnemyCount();
+}
+
+function respawnTarget(t) {
+  const a=Math.random()*Math.PI*2, rd=9+Math.random()*13;
+  const np = new THREE.Vector3(Math.cos(a)*rd, 0, -8-Math.abs(Math.sin(a))*16);
+  np.x = Math.max(-25, Math.min(25, np.x));
+  np.z = Math.max(-28, Math.min(-6, np.z));
+  t.g.position.copy(np);
+  t.aiTarget = np.clone();
+  t.aiMoveTimer = Math.random() * 1.5;
+  t.aiFireTimer = 1 + Math.random() * 2;
+  t.hp=T_HP_MAX; t.alive=true; t.g.visible=true;
+  refreshHpBar(t);
+  updateEnemyCount();
+}
+
+// ============================================================
+// 파티클 시스템 (통합)
+// ============================================================
+// particleList: { pts:THREE.Points, vels:Vector3[], life, maxLife }
+// meshPartList: { mesh:Mesh, vy, life, maxLife }  (단순 상승 파티클)
+// expandList:   { mesh:Mesh, light:PointLight|null, life, maxLife, startScale }
+const particleList = [];
+const meshPartList  = [];
+const expandList    = [];
+
+function spawnParticles(pos, count, color, size, life) {
+  const geo = new THREE.BufferGeometry();
+  const arr = new Float32Array(count*3);
+  for(let i=0;i<count;i++){ arr[i*3]=pos.x; arr[i*3+1]=pos.y; arr[i*3+2]=pos.z; }
+  geo.setAttribute('position', new THREE.BufferAttribute(arr,3));
+  const mat = new THREE.PointsMaterial({
+    color, size, transparent:true, opacity:1,
+    blending:THREE.AdditiveBlending, depthWrite:false
+  });
+  const pts = new THREE.Points(geo, mat);
+  scene.add(pts);
+  const vels = Array.from({length:count}, ()=>new THREE.Vector3(
+    (Math.random()-.5)*9, Math.random()*5+1, (Math.random()-.5)*9
+  ));
+  particleList.push({ pts, vels, life, maxLife:life });
+}
+
+function spawnHitSparks(pos) {
+  spawnParticles(pos, 10, 0xffaa22, 0.07, 0.5);
+}
+
+function spawnExplosion(pos) {
+  spawnParticles(pos, 50, 0xff6600, 0.18, 1.6);
+
+  // 확장 구체
+  const expM = new THREE.Mesh(
+    new THREE.SphereGeometry(0.15,12,12),
+    new THREE.MeshBasicMaterial({ color:0xff8800, transparent:true, opacity:0.8, wireframe:true })
+  );
+  expM.position.copy(pos);
+  scene.add(expM);
+
+  const expL = new THREE.PointLight(0xff6600, 8, 18);
+  expL.position.copy(pos);
+  scene.add(expL);
+
+  expandList.push({ mesh:expM, light:expL, life:0.55, maxLife:0.55, endScale:8 });
+  playExplosionSfx();
+}
+
+function spawnBioticRise(pos) {
+  const geo = new THREE.SphereGeometry(0.05,4,4);
+  const mat = new THREE.MeshBasicMaterial({ color:0x00ff88, transparent:true, opacity:0.85 });
+  const m   = new THREE.Mesh(geo, mat);
+  m.position.copy(pos);
+  scene.add(m);
+  meshPartList.push({ mesh:m, vy:1.4+Math.random()*0.8, life:1.4, maxLife:1.4 });
+}
+
+function updateParticles(dt) {
+  const g = -9.8;
+  for(let i=particleList.length-1;i>=0;i--) {
+    const p = particleList[i];
+    p.life -= dt;
+    if(p.life<=0) {
+      scene.remove(p.pts);
+      p.pts.geometry.dispose(); p.pts.material.dispose();
+      particleList.splice(i,1); continue;
+    }
+    const pos = p.pts.geometry.attributes.position.array;
+    const n   = pos.length/3;
+    for(let j=0;j<n;j++) {
+      p.vels[j].y += g*dt;
+      pos[j*3]   += p.vels[j].x*dt;
+      pos[j*3+1] += p.vels[j].y*dt;
+      pos[j*3+2] += p.vels[j].z*dt;
+    }
+    p.pts.geometry.attributes.position.needsUpdate = true;
+    p.pts.material.opacity = p.life/p.maxLife;
+  }
+
+  for(let i=meshPartList.length-1;i>=0;i--) {
+    const p = meshPartList[i];
+    p.life -= dt;
+    if(p.life<=0) {
+      scene.remove(p.mesh);
+      p.mesh.geometry.dispose(); p.mesh.material.dispose();
+      meshPartList.splice(i,1); continue;
+    }
+    p.mesh.position.y += p.vy*dt;
+    p.mesh.material.opacity = p.life/p.maxLife;
+  }
+
+  for(let i=expandList.length-1;i>=0;i--) {
+    const e = expandList[i];
+    e.life -= dt;
+    if(e.life<=0) {
+      scene.remove(e.mesh);
+      if(e.light) scene.remove(e.light);
+      e.mesh.geometry.dispose(); e.mesh.material.dispose();
+      expandList.splice(i,1); continue;
+    }
+    const r = e.life/e.maxLife;
+    const s = 1 + (1-r)*e.endScale;
+    e.mesh.scale.setScalar(s);
+    e.mesh.material.opacity = r*0.8;
+    if(e.light) e.light.intensity = r*8;
+  }
+}
+
+// ============================================================
+// 바이오틱 필드 이펙트
+// ============================================================
+let bioField = null;
+
+function createBioticField(pos) {
+  if(bioField) { scene.remove(bioField.g); bioField=null; }
+  const g = new THREE.Group();
+  g.position.copy(pos);
+
+  const ringM = new THREE.MeshBasicMaterial({ color:0x00ff88, transparent:true, opacity:0.85, side:THREE.DoubleSide });
+  const r1 = new THREE.Mesh(new THREE.TorusGeometry(2.4,0.055,8,36), ringM.clone());
+  r1.rotation.x = Math.PI/2; g.add(r1);
+  const r2 = new THREE.Mesh(new THREE.TorusGeometry(1.4,0.035,8,24), ringM.clone());
+  r2.rotation.x = Math.PI/2; g.add(r2);
+
+  const disk = new THREE.Mesh(
+    new THREE.CircleGeometry(2.4,36),
+    new THREE.MeshBasicMaterial({ color:0x00ff88, transparent:true, opacity:0.08, side:THREE.DoubleSide })
+  );
+  disk.rotation.x = -Math.PI/2; disk.position.y=0.01; g.add(disk);
+
+  const pl = new THREE.PointLight(0x00ff88, 2.5, 7);
+  pl.position.y = 0.5; g.add(pl);
+
+  scene.add(g);
+  bioField = { g, r1, r2, disk, pl, life:5, maxLife:5 };
+}
+
+function updateBioticField(dt) {
+  if(!bioField) return;
+  bioField.life -= dt;
+  const r = Math.max(0, bioField.life/bioField.maxLife);
+
+  // 플레이어가 필드 반경(2.4) 안에 있을 때만 회복 표시
+  const dxz = Math.sqrt(
+    Math.pow(camera.position.x - bioField.g.position.x, 2) +
+    Math.pow(camera.position.z - bioField.g.position.z, 2)
+  );
+  document.getElementById('bio').style.opacity = (dxz < 2.4 && bioField.life > 0) ? '1' : '0';
+  bioField.r1.rotation.z += dt*1.6;
+  bioField.r2.rotation.z -= dt*2.2;
+  bioField.r1.material.opacity = r*0.85;
+  bioField.r2.material.opacity = r*0.85;
+  bioField.disk.material.opacity = r*0.1;
+  bioField.pl.intensity = r*2.5;
+
+  if(Math.random()<0.25) {
+    const a=Math.random()*Math.PI*2, rd=Math.random()*2.4;
+    spawnBioticRise(bioField.g.position.clone().add(new THREE.Vector3(Math.cos(a)*rd,0,Math.sin(a)*rd)));
+  }
+
+  if(bioField.life<=0) {
+    scene.remove(bioField.g);
+    bioField=null;
+    document.getElementById('bio').style.opacity='0';
+    return;
+  }
+}
+
+// ============================================================
+// 탄알 시스템
+// ============================================================
+const bullets  = [];
+const rockets  = [];
+const BSPEED   = 65;
+const BMAX     = 80;
+
+function fireBullet() {
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const pos = camera.position.clone().addScaledVector(dir, 0.8);
+
+  const isTac = skills.tac.active;
+  const col   = isTac ? 0xff5500 : 0x88aaff;
+  const sz    = isTac ? 0.065    : 0.038;
+  const dmg   = isTac ? 28       : 15;
+
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(sz, 6, 6),
+    new THREE.MeshBasicMaterial({ color:col, transparent:true, opacity:0.92, blending:THREE.AdditiveBlending })
+  );
+  mesh.position.copy(pos);
+  const bl = new THREE.PointLight(col, isTac?2.5:1.5, isTac?3:2);
+  mesh.add(bl);
+  scene.add(mesh);
+
+  bullets.push({ mesh, vel:dir.clone().multiplyScalar(BSPEED), dist:0, dmg });
+}
+
+function fireRocket() {
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const pos = camera.position.clone().addScaledVector(dir, 1.0);
+
+  const mesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06,0.06,0.35,8),
+    new THREE.MeshBasicMaterial({ color:0xff4400 })
+  );
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+  mesh.position.copy(pos);
+
+  const gl = new THREE.Mesh(
+    new THREE.SphereGeometry(0.14,8,8),
+    new THREE.MeshBasicMaterial({ color:0xff8800, transparent:true, opacity:0.5, blending:THREE.AdditiveBlending })
+  );
+  mesh.add(gl);
+  const pl = new THREE.PointLight(0xff6600, 4, 5);
+  mesh.add(pl);
+  scene.add(mesh);
+
+  rockets.push({ mesh, vel:dir.clone().multiplyScalar(32), dist:0 });
+  playSfxPing(220);
+}
+
+function updateBullets(dt) {
+  for(let i=bullets.length-1;i>=0;i--) {
+    const b = bullets[i];
+    const mv = b.vel.clone().multiplyScalar(dt);
+    b.mesh.position.add(mv);
+    b.dist += mv.length();
+
+    let hit=false;
+    for(const t of targets) {
+      if(!t.alive) continue;
+      const tp = t.g.position.clone().setY(t.g.position.y+1);
+      if(b.mesh.position.distanceTo(tp)<0.75) {
+        t.hp -= b.dmg;
+        refreshHpBar(t);
+        spawnHitSparks(b.mesh.position.clone());
+        flashHit();
+        if(t.hp<=0) { score+=100; hits++; killTarget(t); addKillfeed(100); }
+        else { score+=10; hits++; }
+        updateScoreUI();
+        hit=true; break;
+      }
+    }
+
+    const p = b.mesh.position;
+    if(hit||b.dist>BMAX||p.y<0||Math.abs(p.x)>ARENA||Math.abs(p.z)>ARENA) {
+      if(!hit && p.y<0.15) spawnParticles(p.clone(),6,0x888888,0.06,0.3);
+      scene.remove(b.mesh); bullets.splice(i,1);
+    }
+  }
+}
+
+function updateRockets(dt) {
+  for(let i=rockets.length-1;i>=0;i--) {
+    const r = rockets[i];
+    const mv = r.vel.clone().multiplyScalar(dt);
+    r.mesh.position.add(mv);
+    r.dist += mv.length();
+
+    // 트레일
+    if(Math.random()<0.5) {
+      const tm = new THREE.Mesh(
+        new THREE.SphereGeometry(0.05,4,4),
+        new THREE.MeshBasicMaterial({ color:0xff6600, transparent:true, opacity:0.75 })
+      );
+      tm.position.copy(r.mesh.position);
+      scene.add(tm);
+      expandList.push({ mesh:tm, light:null, life:0.25, maxLife:0.25, endScale:0 });
+    }
+
+    let exploded=false;
+    for(const t of targets) {
+      if(!t.alive) continue;
+      if(r.mesh.position.distanceTo(t.g.position.clone().setY(1))<1.8) { exploded=true; break; }
+    }
+
+    const p = r.mesh.position;
+    if(!exploded && (r.dist>70||p.y<0||Math.abs(p.x)>ARENA||Math.abs(p.z)>ARENA)) exploded=true;
+
+    if(exploded) {
+      const ep = r.mesh.position.clone();
+      spawnExplosion(ep);
+      // 범위 피해
+      for(const t of targets) {
+        if(!t.alive) continue;
+        const d = ep.distanceTo(t.g.position.clone().setY(1));
+        if(d<4.5) {
+          const dmg = Math.round(90*(1-d/4.5));
+          t.hp -= dmg; refreshHpBar(t);
+          if(t.hp<=0) { score+=150; hits++; killTarget(t); addKillfeed(150); }
+          else { score+=20; hits++; }
+          updateScoreUI();
+        }
+      }
+      scene.remove(r.mesh); rockets.splice(i,1);
+    }
+  }
+}
+
+// ============================================================
+// 시야 판정 – 슬랩법 레이-AABB 교차 검사 (collidables 배열 사용)
+// ============================================================
+function canSeePlayer(enemyPos) {
+  const ox=enemyPos.x, oy=1.5, oz=enemyPos.z;
+  const tx=camera.position.x, ty=camera.position.y, tz=camera.position.z;
+  const dx=tx-ox, dy=ty-oy, dz=tz-oz;
+  const len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+  if(len<0.1) return true;
+  const rx=dx/len, ry=dy/len, rz=dz/len;
+  for(const ob of collidables) {
+    let tmin=0, tmax=len, skip=false;
+    const axes=[
+      [ox,rx,ob.minX,ob.maxX],[oy,ry,ob.minY,ob.maxY],[oz,rz,ob.minZ,ob.maxZ]
+    ];
+    for(const [o,r2,mn,mx] of axes) {
+      if(Math.abs(r2)<1e-8){ if(o<mn||o>mx){skip=true;break;} continue; }
+      let t1=(mn-o)/r2, t2=(mx-o)/r2;
+      if(t1>t2){const tmp=t1;t1=t2;t2=tmp;}
+      tmin=Math.max(tmin,t1); tmax=Math.min(tmax,t2);
+      if(tmax<tmin){skip=true;break;}
+    }
+    if(!skip && tmax>=tmin && tmax>0) return false;
+  }
+  return true;
+}
+
+// ============================================================
+// 적 탄알 시스템
+// ============================================================
+const enemyBullets = [];
+
+function fireEnemyBullet(pos) {
+  const origin = pos.clone().setY(1.5);
+  const target = camera.position.clone();
+  // 스프레드 (엄폐 시 살아남을 수 있는 수준)
+  const spread = 0.14;
+  target.x += (Math.random()-0.5)*spread*6;
+  target.y += (Math.random()-0.5)*spread*3;
+  target.z += (Math.random()-0.5)*spread*6;
+  const dir = target.clone().sub(origin).normalize();
+
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.055, 6, 6),
+    new THREE.MeshBasicMaterial({ color:0xff2200, transparent:true, opacity:0.95, blending:THREE.AdditiveBlending })
+  );
+  mesh.position.copy(origin);
+  const bl = new THREE.PointLight(0xff2200, 2.5, 4);
+  mesh.add(bl);
+  scene.add(mesh);
+
+  enemyBullets.push({ mesh, vel:dir.clone().multiplyScalar(42), dist:0 });
+  playEnemyShotSfx();
+  spawnParticles(origin.clone(), 3, 0xff4400, 0.09, 0.12);
+}
+
+function updateEnemyBullets(dt) {
+  for(let i=enemyBullets.length-1;i>=0;i--) {
+    const b = enemyBullets[i];
+    const mv = b.vel.clone().multiplyScalar(dt);
+    b.mesh.position.add(mv);
+    b.dist += mv.length();
+    const p = b.mesh.position;
+    let remove = false;
+
+    // 플레이어 충돌 (반경 0.55)
+    if(!gameOver && p.distanceTo(camera.position) < 0.55) {
+      damagePlayer(7);
+      remove = true;
+    }
+    // 거리/경계 제거
+    if(!remove && (b.dist>90 || p.y<0 || Math.abs(p.x)>ARENA || Math.abs(p.z)>ARENA))
+      remove = true;
+
+    if(remove) { scene.remove(b.mesh); enemyBullets.splice(i,1); }
+  }
+}
+
+// ============================================================
+// 플레이어 컨트롤러
+// ============================================================
+const keys = {};
+let yaw=0, pitch=0;
+let locked=false;
+const vel = new THREE.Vector3();
+const PSPD=6, SPRINT=1.5, JUMP=6.5, GRAV=-15, PH=1.7;
+let onGround=true;
+
+let firing=false, fireTimer=0;
+let hintDismissed = false;
+
+// 포인터 락 – document 전체에서 클릭 수신 (캔버스 외 HUD에 가려도 작동)
+document.addEventListener('click', ()=>{
+  if(!locked){
+    resume();
+    const req = canvas.requestPointerLock();
+    if(req && typeof req.catch === 'function') req.catch(err => console.warn('[PointerLock] 요청 실패:', err));
+  }
+});
+document.addEventListener('pointerlockchange', ()=>{
+  locked = document.pointerLockElement === canvas;
+  if(locked) hintDismissed = true;
+  document.getElementById('pause').style.display = locked ? 'none' : 'flex';
+  // 힌트는 최초 한 번만 표시, ESC 후 재표시 안 함
+  document.getElementById('hint').style.display = (locked || hintDismissed) ? 'none' : 'block';
+});
+document.addEventListener('pointerlockerror', () => {
+  console.error('[PointerLock] 포인터 락 에러 – 브라우저가 요청을 거부했습니다.');
+});
+document.addEventListener('mousemove', e=>{
+  if(!locked) return;
+  const s=0.0018;
+  yaw   -= e.movementX*s;
+  pitch -= e.movementY*s;
+  pitch  = Math.max(-1.48, Math.min(1.48, pitch));
+});
+document.addEventListener('keydown', e=>{ keys[e.code]=true; onKey(e.code); });
+document.addEventListener('keyup',   e=>{ keys[e.code]=false; });
+document.addEventListener('mousedown', e=>{ if(e.button===0&&locked){ resume(); firing=true; } });
+document.addEventListener('mouseup',   e=>{ if(e.button===0) firing=false; });
+
+function onKey(code) {
+  if(!locked) return;
+  if(code==='KeyE') useSkill('rocket');
+  if(code==='KeyQ') useSkill('biotic');
+  if(code==='KeyR') useSkill('tac');
+}
+
+function updatePlayer(dt) {
+  const fwd   = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+  const right = new THREE.Vector3( Math.cos(yaw),0,-Math.sin(yaw));
+  const sprint= keys['ShiftLeft']||keys['ShiftRight'];
+  const spd   = PSPD*(sprint?SPRINT:1);
+
+  const mv = new THREE.Vector3();
+  if(keys['KeyW']||keys['ArrowUp'])    mv.add(fwd);
+  if(keys['KeyS']||keys['ArrowDown'])  mv.sub(fwd);
+  if(keys['KeyA']||keys['ArrowLeft'])  mv.sub(right);
+  if(keys['KeyD']||keys['ArrowRight']) mv.add(right);
+  if(mv.lengthSq()>0) mv.normalize().multiplyScalar(spd);
+
+  vel.x += (mv.x - vel.x)*Math.min(dt*12,1);
+  vel.z += (mv.z - vel.z)*Math.min(dt*12,1);
+
+  if(!onGround) vel.y += GRAV*dt;
+  if(keys['Space'] && onGround) { vel.y=JUMP; onGround=false; }
+
+  camera.position.addScaledVector(vel, dt);
+
+  if(camera.position.y <= PH) {
+    camera.position.y=PH; vel.y=0; onGround=true;
+  } else { onGround=false; }
+
+  camera.position.x = Math.max(-ARENA+1, Math.min(ARENA-1, camera.position.x));
+  camera.position.z = Math.max(-ARENA+1, Math.min(ARENA-1, camera.position.z));
+
+  // 장애물 AABB 충돌 해결 (Minkowski 확장 AABB)
+  const PR = 0.32;
+  for(const ob of collidables) {
+    const px = camera.position.x, pz = camera.position.z, py = camera.position.y;
+    if(py - PH >= ob.maxY || py <= ob.minY) continue;
+    const eMinX = ob.minX - PR, eMaxX = ob.maxX + PR;
+    const eMinZ = ob.minZ - PR, eMaxZ = ob.maxZ + PR;
+    if(px <= eMinX || px >= eMaxX || pz <= eMinZ || pz >= eMaxZ) continue;
+    const dL = px - eMinX, dR = eMaxX - px, dF = pz - eMinZ, dBk = eMaxZ - pz;
+    const mn = Math.min(dL, dR, dF, dBk);
+    if(mn === dL)       camera.position.x = eMinX;
+    else if(mn === dR)  camera.position.x = eMaxX;
+    else if(mn === dF)  camera.position.z = eMinZ;
+    else                camera.position.z = eMaxZ;
+  }
+
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+}
+
+// ============================================================
+// 무기 리코일 / 애니메이션
+// ============================================================
+function updateWeaponAnim(dt) {
+  recoilV += (-recoil*28 - recoilV*7)*dt;
+  recoil  += recoilV*dt;
+  wGroup.position.z = wGroupBaseZ + recoil*0.028;
+  wGroup.rotation.x = recoil*0.06;
+
+  // 타격태세 발광
+  const tac = skills.tac;
+  tacEmissive.material.opacity = tac.active ? (0.3+0.15*Math.sin(Date.now()*0.006)) : 0;
+}
+
+// ============================================================
+// 사격 업데이트
+// ============================================================
+let muzzleTimer=0;
+let chExpand=0;
+
+function updateFiring(dt) {
+  fireTimer -= dt;
+  const tac = skills.tac.active;
+  const interval = tac ? 0.05 : 0.1; // 타격태세: 1200RPM
+
+  if(firing && fireTimer<=0 && locked) {
+    fireTimer=interval;
+    fireBullet();
+    playShot(tac);
+    recoilV -= 4.5;
+    muzzleTimer=0.06;
+    chExpand=10;
+  }
+
+  // 머즐 플래시
+  muzzleTimer -= dt;
+  const mf = muzzleTimer>0;
+  mFlashMat.opacity    = mf ? 0.95 : 0;
+  mFlashLight.intensity= mf ? 5    : 0;
+
+}
+
+// ============================================================
+// 스킬 시스템
+// ============================================================
+const skills = {
+  rocket: { cd:6,  timer:0, active:false },
+  biotic: { cd:12, timer:0, active:false },
+  tac:    { cd:15, timer:0, active:false, dur:6, durTimer:0 },
+};
+
+function useSkill(name) {
+  const s = skills[name];
+  if(s.timer>0) return;
+  playSfxPing(660);
+
+  if(name==='rocket') {
+    fireRocket();
+    s.timer=s.cd;
+  } else if(name==='biotic') {
+    createBioticField(camera.position.clone().setY(0.05));
+    s.timer=s.cd;
+  } else if(name==='tac') {
+    s.active=true; s.durTimer=s.dur; s.timer=s.cd;
+    document.getElementById('vign').style.opacity='1';
+  }
+}
+
+function updateSkills(dt) {
+  for(const nm in skills) {
+    const s=skills[nm];
+    if(s.timer>0) s.timer=Math.max(0,s.timer-dt);
+  }
+
+  const tac=skills.tac;
+  if(tac.active) {
+    tac.durTimer -= dt;
+    if(tac.durTimer<=0) {
+      tac.active=false;
+      document.getElementById('vign').style.opacity='0';
+    }
+  }
+
+  // CD UI
+  function cdUI(id,s) {
+    const el=document.getElementById(id);
+    if(s.timer>0){ el.textContent=s.timer.toFixed(1); el.classList.remove('rdy'); }
+    else el.classList.add('rdy');
+  }
+  cdUI('cd-e',skills.rocket);
+  cdUI('cd-q',skills.biotic);
+  cdUI('cd-r',skills.tac);
+}
+
+// ============================================================
+// 점수 / 플레이어 체력 / 게임 상태
+// ============================================================
+let score=0, hits=0;
+let playerHP = 100;
+const PLAYER_HP_MAX = 100;
+let gameOver = false;
+
+function updateScoreUI() {
+  document.getElementById('sv').textContent=score;
+  document.getElementById('hv').textContent=hits;
+}
+
+// 체력 바 실시간 업데이트
+function updateHPBar() {
+  const r = playerHP / PLAYER_HP_MAX;
+  const fill = document.querySelector('#hp .fill');
+  const lbl  = document.querySelector('#hp .lbl');
+  fill.style.width = (r*100)+'%';
+  fill.style.background = r>0.5 ? 'linear-gradient(90deg,#f44,#f84)'
+                        : r>0.3 ? 'linear-gradient(90deg,#f82,#fa4)'
+                        : 'linear-gradient(90deg,#f11,#f33)';
+  lbl.textContent = `HEALTH ░░░░░░░░░░ ${Math.ceil(playerHP)}`;
+}
+
+// 플레이어 피격 처리
+function damagePlayer(dmg) {
+  if(gameOver) return;
+  playerHP = Math.max(0, playerHP - dmg);
+  updateHPBar();
+  // 피격 비네트 플래시
+  const el = document.getElementById('player-hit');
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>el.style.opacity='0', 220);
+  playPlayerHitSfx();
+  if(playerHP <= 0) triggerGameOver();
+}
+
+// 게임오버 처리
+function triggerGameOver() {
+  gameOver = true;
+  document.exitPointerLock();
+  document.getElementById('go-score').textContent = `SCORE: ${score}`;
+  document.getElementById('go-hits').textContent  = `HITS:  ${hits}`;
+  document.getElementById('gameover').style.display = 'flex';
+}
+
+// 게임 재시작
+function restartGame() {
+  gameOver = false;
+  playerHP = PLAYER_HP_MAX;
+  score = 0; hits = 0;
+  updateHPBar();
+  updateScoreUI();
+
+  // 적 탄알 제거
+  for(const b of enemyBullets) scene.remove(b.mesh);
+  enemyBullets.length = 0;
+  // 플레이어 탄알/로켓 제거
+  for(const b of bullets) scene.remove(b.mesh); bullets.length = 0;
+  for(const r of rockets) scene.remove(r.mesh); rockets.length = 0;
+
+  // 모든 적 초기화
+  targets.forEach(t => {
+    t.hp = T_HP_MAX; t.alive = true; t.g.visible = true;
+    refreshHpBar(t);
+    const a=Math.random()*Math.PI*2, rd=9+Math.random()*13;
+    const np=new THREE.Vector3(Math.cos(a)*rd,0,-8-Math.abs(Math.sin(a))*16);
+    np.x=Math.max(-25,Math.min(25,np.x)); np.z=Math.max(-28,Math.min(-6,np.z));
+    t.g.position.copy(np);
+    t.aiTarget=np.clone(); t.aiMoveTimer=Math.random()*2; t.aiFireTimer=1+Math.random()*2;
+  });
+
+  // 플레이어 위치 리셋
+  camera.position.set(0,1.7,8);
+  vel.set(0,0,0); yaw=0; pitch=0;
+
+  // 스킬 리셋
+  for(const nm in skills){ skills[nm].timer=0; skills[nm].active=false; }
+  if(skills.tac) skills.tac.durTimer=0;
+  document.getElementById('vign').style.opacity='0';
+  document.getElementById('bio').style.opacity='0';
+  document.getElementById('gameover').style.display='none';
+
+  updateEnemyCount();
+}
+
+// 살아있는 적 수 표시
+function updateEnemyCount() {
+  const alive = targets.filter(t=>t.alive).length;
+  document.getElementById('enemy-count').textContent = `ENEMIES: ${alive}`;
+}
+
+function addKillfeed(pts) {
+  const kf = document.getElementById('kf');
+  const div = document.createElement('div');
+  div.className='kfe';
+  div.textContent=`▶ TARGET DOWN  +${pts}`;
+  kf.appendChild(div);
+  setTimeout(()=>div.remove(),2800);
+}
+
+function flashHit() {
+  const el=document.getElementById('hit-flash');
+  el.style.opacity='1';
+  setTimeout(()=>el.style.opacity='0',60);
+}
+
+// 크로스헤어 확장 (base 36px – CSS와 일치)
+function updateCrosshair(dt) {
+  if(chExpand>0) chExpand=Math.max(0,chExpand-dt*60);
+  const s = 36 + chExpand;
+  const ch = document.getElementById('ch');
+  ch.style.width = s+'px'; ch.style.height = s+'px';
+}
+
+// ============================================================
+// 타겟(적 AI) 업데이트 – 랜덤 이동 + 플레이어 사격
+// ============================================================
+function updateTargets(dt) {
+  for(const t of targets) {
+    if(!t.alive) {
+      t.respawn -= dt;
+      if(t.respawn <= 0) respawnTarget(t);
+      continue;
+    }
+
+    // ── AI 이동: 일정 시간마다 새 목표 위치 선택 ──
+    t.aiMoveTimer -= dt;
+    if(t.aiMoveTimer <= 0) {
+      // 랜덤 위치 (맵 안쪽)
+      const ax=(Math.random()-0.5)*(ARENA*1.7);
+      const az=(Math.random()-0.5)*(ARENA*1.7);
+      t.aiTarget = new THREE.Vector3(
+        Math.max(-ARENA+3, Math.min(ARENA-3, ax)), 0,
+        Math.max(-ARENA+3, Math.min(ARENA-3, az))
+      );
+      t.aiMoveTimer = 2 + Math.random() * 2;
+    }
+
+    const dx = t.aiTarget.x - t.g.position.x;
+    const dz2 = t.aiTarget.z - t.g.position.z;
+    const horiz = Math.sqrt(dx*dx + dz2*dz2);
+    if(horiz > 0.6) {
+      const nx = t.g.position.x + (dx/horiz)*t.aiSpeed*dt;
+      const nz = t.g.position.z + (dz2/horiz)*t.aiSpeed*dt;
+      t.g.position.x = Math.max(-ARENA+2, Math.min(ARENA-2, nx));
+      t.g.position.z = Math.max(-ARENA+2, Math.min(ARENA-2, nz));
+
+      // 장애물 충돌 (단순 AABB 밀어내기)
+      const ER = 0.55;
+      for(const ob of collidables) {
+        const ex=t.g.position.x, ez=t.g.position.z;
+        if(ex+ER>ob.minX && ex-ER<ob.maxX && ez+ER>ob.minZ && ez-ER<ob.maxZ) {
+          const dL=ex-ob.minX, dR=ob.maxX-ex, dF=ez-ob.minZ, dBk=ob.maxZ-ez;
+          const mn=Math.min(dL,dR,dF,dBk);
+          if(mn===dL)      t.g.position.x=ob.minX-ER;
+          else if(mn===dR) t.g.position.x=ob.maxX+ER;
+          else if(mn===dF) t.g.position.z=ob.minZ-ER;
+          else             t.g.position.z=ob.maxZ+ER;
+        }
+      }
+      // 플레이어 방향으로 몸 회전
+      t.g.rotation.y = Math.atan2(dx, dz2);
+    }
+
+    // HP 바 빌보드
+    t.hpG.lookAt(camera.position);
+
+    // ── AI 사격: 시야 확보 시 플레이어 방향으로 발사 ──
+    if(!gameOver) {
+      t.aiFireTimer -= dt;
+      if(t.aiFireTimer <= 0) {
+        t.aiFireTimer = t.aiFireInterval + (Math.random()-0.5)*0.6;
+        if(canSeePlayer(t.g.position)) {
+          fireEnemyBullet(t.g.position.clone());
+        }
+      }
+    }
+  }
+}
+
+// ============================================================
+// 창 리사이즈
+// ============================================================
+window.addEventListener('resize', ()=>{
+  const w=innerWidth, h=innerHeight;
+  renderer.setSize(w,h);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+  wCam.aspect=w/h;   wCam.updateProjectionMatrix();
+});
+
+// ============================================================
+// 메인 루프
+// ============================================================
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  if(!gameOver) updatePlayer(dt);
+  updateWeaponAnim(dt);
+  if(!gameOver) updateFiring(dt);
+  updateBullets(dt);
+  updateRockets(dt);
+  updateEnemyBullets(dt);
+  updateTargets(dt);
+  updateParticles(dt);
+  updateBioticField(dt);
+  updateSkills(dt);
+  updateCrosshair(dt);
+
+  // 렌더
+  renderer.clear();
+  renderer.render(scene, camera);
+  renderer.clearDepth();
+  renderer.render(wScene, wCam);
+}
+
+// 재시작 버튼
+document.getElementById('go-restart').addEventListener('click', ()=>{ restartGame(); canvas.requestPointerLock(); });
+
+// 초기 HP 바 & 적 수 표시
+updateHPBar();
+updateEnemyCount();
+
+animate();
+</script>
+</body>
+</html>
